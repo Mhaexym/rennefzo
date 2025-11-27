@@ -1,0 +1,7 @@
+{
+  "dart.flutterAdditionalArgs": [],
+  "dart.env": {
+    "CHROME_EXECUTABLE": "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
+  }
+}
+
