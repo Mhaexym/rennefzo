@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() {
   runApp(const MyApp());
@@ -55,6 +58,59 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  Map<String, dynamic>? _apiResponse;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  // Backend API base URL - handles different platforms
+  // Uses environment variable API_BASE_URL if set, otherwise falls back to platform-specific defaults
+  String get _baseUrl {
+    // Check for environment variable first (set via --dart-define=API_BASE_URL=...)
+    const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+
+    if (apiBaseUrl.isNotEmpty) {
+      return apiBaseUrl;
+    }
+
+    // Fallback to platform-specific defaults
+    if (kIsWeb) {
+      // For web, use the same host (backend runs on port 8000)
+      return 'http://127.0.0.1:8000';
+    }
+
+    // For mobile/desktop platforms, use localhost
+    // Note: Android emulator users can override via API_BASE_URL env var if needed
+    return 'http://127.0.0.1:8000';
+  }
+
+  Future<void> _fetchRootEndpoint() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _apiResponse = null;
+    });
+
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/'));
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _apiResponse = json.decode(response.body) as Map<String, dynamic>;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load: ${response.statusCode}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   void _incrementCounter() {
     setState(() {
@@ -88,28 +144,93 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Center(
         // Center is a layout widget. It takes a single child and positions it
         // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            // Column is also a layout widget. It takes a list of children and
+            // arranges them vertically. By default, it sizes itself to fit its
+            // children horizontally, and tries to be as tall as its parent.
+            //
+            // Column has various properties to control how it sizes itself and
+            // how it positions its children. Here we use mainAxisAlignment to
+            // center the children vertically; the main axis here is the vertical
+            // axis because Columns are vertical (the cross axis would be
+            // horizontal).
+            //
+            // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
+            // action in the IDE, or press "p" in the console), to see the
+            // wireframe for each widget.
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('You have pushed the button this many times:'),
+              Text(
+                '$_counter',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _fetchRootEndpoint,
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Call Root Endpoint'),
+              ),
+              const SizedBox(height: 20),
+              if (_apiResponse != null)
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'API Response:',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Message: ${_apiResponse!['message']}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          Text(
+                            'Version: ${_apiResponse!['version']}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          Text(
+                            'Docs: ${_apiResponse!['docs']}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Card(
+                    color: Colors.red.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        _errorMessage!,
+                        style: TextStyle(
+                          color: Colors.red.shade900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(

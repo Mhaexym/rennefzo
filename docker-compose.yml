@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: rennefzo_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-rennefzo}
+      MYSQL_USER: ${MYSQL_USER:-rennefzo_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-rennefzo_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Mail Service (MailHog for development/testing)
+  mail:
+    image: mailhog/mailhog:latest
+    container_name: rennefzo_mail
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP port
+      - "8025:8025"  # Web UI port
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./rennefzo_backend
+      dockerfile: Dockerfile
+    container_name: rennefzo_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-rennefzo_user}:${MYSQL_PASSWORD:-rennefzo_password}@db:3306/${MYSQL_DATABASE:-rennefzo}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["*"]}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./rennefzo_backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Flutter Frontend (Web)
+  frontend:
+    build:
+      context: ./rennefzo_app
+      dockerfile: Dockerfile
+    container_name: rennefzo_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+
